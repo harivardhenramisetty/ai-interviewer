@@ -274,6 +274,12 @@ def render_interview():
                         "role": "assistant", "content": decision.next_question,
                         "debug": decision.model_dump(),
                     })
+                    if decision.next_action != ActionEnum.FINISH and decision.next_question:
+                        st.session_state.audio_path = speak_question(
+                            decision.next_question,
+                            question_type="question",
+                            output_file="current_question.mp3",
+                        )
                     if decision.next_action == ActionEnum.FINISH:
                         st.session_state.interview_finished = True
                 except Exception as e:

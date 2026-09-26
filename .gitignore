@@ -24,3 +24,8 @@ uploads/
 
 # Logs
 *.log
+# Camera integrity generated files
+__pycache__/
+integrity/__pycache__/
+integrity/latest_interview.mp4
+integrity/detection_log.json

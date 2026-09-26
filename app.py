@@ -278,7 +278,7 @@ def render_interview():
                         st.session_state.audio_path = speak_question(
                             decision.next_question,
                             question_type="question",
-                            output_file="current_question.mp3",
+                            output_file=f"question_{st.session_state.question_count}.mp3",
                         )
                     if decision.next_action == ActionEnum.FINISH:
                         st.session_state.interview_finished = True

@@ -194,6 +194,11 @@ def render_system_check():
             with st.spinner("Preparing your personalised interview…"):
                 engine = Engine(target_role=st.session_state.target_role, resume_text=st.session_state.resume_text)
                 engine.initialize_interview()
+                st.session_state.audio_path = speak_question(
+                    engine.current_question,
+                    question_type="question",
+                    output_file="current_question.mp3",
+                )
                 st.session_state.engine = engine
                 st.session_state.interview_started = True
                 st.session_state.start_time = time.time()

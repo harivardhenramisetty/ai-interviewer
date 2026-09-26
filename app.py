@@ -258,7 +258,11 @@ def render_interview():
                     <div class="user-avatar">You</div>
                 </div>
                 """, unsafe_allow_html=True)
-
+        if st.session_state.get("audio_path"):
+            st.audio(
+                st.session_state.audio_path,
+                format="audio/mp3",
+            )
         if not st.session_state.interview_finished:
             answer = st.chat_input("Type your answer…")
             if answer:

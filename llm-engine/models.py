@@ -25,3 +25,36 @@ class AnswerEvaluation(BaseModel):
     weaknesses: list[str]
     feedback: str
     recommended_action: Literal["follow_up", "move_on", "increase_difficulty"]
+
+class InterviewTurn(BaseModel):
+    question: Question
+    answer: str | None
+    evaluation: AnswerEvaluation | None
+
+class InterviewSession(BaseModel):
+    candidate_profile: CandidateProfile
+    target_role: str
+    job_description: str | None
+    history: list[InterviewTurn]
+    current_question: Question | None
+    question_number: int
+    max_questions: int
+    status: Literal["not_started", "in_progress", "completed"]
+
+class QualitativeReport(BaseModel):
+    strengths: list[str]
+    areas_for_improvement: list[str]
+    topics_demonstrated: list[str]
+    recommendations: list[str]
+    summary: str
+
+class InterviewReport(BaseModel):
+    overall_score: float
+    technical_score: float
+    depth_score: float
+    clarity_score: float
+    strengths: list[str]
+    areas_for_improvement: list[str]
+    topics_demonstrated: list[str]
+    recommendations: list[str]
+    summary: str

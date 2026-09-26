@@ -20,6 +20,7 @@ else:
 
 from models import ActionEnum
 from ui_styles import inject_css
+from voice.interview_voice import speak_question
 
 load_dotenv()
 

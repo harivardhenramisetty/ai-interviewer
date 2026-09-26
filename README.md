@@ -1,34 +1,68 @@
-# AI-Powered Interview Bot
+# 🎙️ AI Interviewer Platform
 
-An MVP of an adaptive AI interviewer powered by Gemini and Streamlit.
+An intelligent, real-time adaptive technical interview platform featuring **Voice Narration (Deepgram TTS)**, **Dynamic Resume Parsing**, **Context-Aware Adaptive Questioning**, and **Strict Technical Scoring with Comprehensive Final Reports**.
 
-## Setup Instructions
+---
 
-1.  **Clone or create the directory structure.**
-2.  **Create a Virtual Environment (Optional but recommended):**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    ```
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  **Set up API Key:**
-    *   Create a `.env` file in the root directory (copy from `.env.example`).
-    *   Add your Gemini API key: `GEMINI_API_KEY=your_api_key_here`
-    *   Alternatively, set it as an environment variable in your terminal.
-5.  **Run the application:**
-    ```bash
-    streamlit run app.py
-    ```
+## ⚡ Quick Start (One Command)
 
-## Demo Flow
+```bash
+chmod +x start.sh
+./start.sh
+```
 
-1.  Open the Streamlit app in your browser (usually `http://localhost:8501`).
-2.  In the sidebar, enter a **Target Role** (e.g., "Senior Python Engineer").
-3.  Upload a **PDF Resume**.
-4.  Click **Start Interview**. The bot will analyze the resume and ask the first customized question.
-5.  Reply to the questions in the chat interface. The bot will adaptively decide whether to probe deeper, clarify, move on, or finish based on your answers. You can view its reasoning in the expandable debug section.
-6.  Once the bot decides to finish (or after enough questions), the interview concludes.
-7.  Click **Generate Final Evaluation Report** to see the detailed assessment.
+Then open **[http://localhost:5173](http://localhost:5173)** in your browser!
+
+---
+
+## 🛠️ Manual Terminal Setup
+
+### 1. Environment Configuration
+Create a `.env` file from the example template:
+```bash
+cp .env.example .env
+```
+*(Optional: Add your `DEEPGRAM_API_KEY` or `OPENROUTER_API_KEY`. The platform includes a built-in smart engine that works seamlessly out of the box).*
+
+### 2. Start Backend (Terminal 1)
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn backend.main:app --reload --port 8000
+```
+- **Backend URL:** `http://localhost:8000`
+- **Swagger API Docs:** `http://localhost:8000/docs`
+
+### 3. Start Frontend (Terminal 2)
+```bash
+cd client
+npm install
+npm run dev
+```
+- **Frontend App:** `http://localhost:5173`
+
+---
+
+## 🎬 Hackathon Reviewer Demo Flow
+
+1. **Upload Resume / Select Role**:
+   - Upload any PDF resume or enter a target role (e.g. *Senior Frontend Engineer*, *Machine Learning Engineer*, *DevOps/Cloud Architect*).
+   - The platform dynamically extracts the candidate's real name, technical skills, and experience level.
+2. **Interactive Voice Interview**:
+   - The AI speaks every question aloud with realistic voice modulation.
+   - You can click the **🔊 / 🔇** button in the header at any time to toggle or mute audio.
+3. **Adaptive Real-Time Probing**:
+   - Strong answers dynamically trigger targeted deep-dive follow-ups on specific frameworks and architectures mentioned.
+   - Non-answers or weak answers smoothly transition to new domains without getting stuck.
+4. **Final Assessment & Report**:
+   - Concludes with an in-depth score breakdown (Technical Accuracy, Depth, Clarity, Overall Recommendation, and Actionable Feedback).
+
+---
+
+## 🏗️ Architecture Stack
+
+- **Frontend**: React 18, Vite, Modern Glassmorphism CSS, Web Audio API
+- **Backend**: FastAPI (Python 3.11+), SQLite, PyMuPDF (PDF Parser)
+- **Voice / Audio**: Deepgram Aura Text-to-Speech
+- **LLM / AI Engine**: OpenRouter & Smart Heuristic Multi-Domain Fallback Engine

@@ -35,3 +35,22 @@ def speak_question(
         mode=mode,
         output_file=output_file,
     )
+def speak_interview_question(
+    question,
+    output_file: str = "current_question.mp3",
+) -> str:
+    """
+    Convert an LLM Question object into speech.
+
+    Expects the Question object to contain:
+    - question
+    - question_type
+    """
+
+    voice_mode = "question"
+
+    return speak_question(
+        question=question.question,
+        question_type=voice_mode,
+        output_file=output_file,
+    )

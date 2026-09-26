@@ -17,14 +17,15 @@ class Question(BaseModel):
     reason: str
 
 class AnswerEvaluation(BaseModel):
-    score: int
-    technical_accuracy: int
-    depth: int
-    clarity: int
-    strengths: list[str]
-    weaknesses: list[str]
-    feedback: str
-    recommended_action: Literal["follow_up", "move_on", "increase_difficulty"]
+    is_relevant: bool
+    score: float
+    technical_accuracy: float
+    depth: float
+    clarity: float
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    feedback: str = ""
+    recommended_action: Literal["follow_up", "move_on", "increase_difficulty"] = "move_on"
 
 class InterviewTurn(BaseModel):
     question: Question

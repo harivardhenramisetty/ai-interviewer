@@ -1,6 +1,20 @@
+import sys
 import time
-from models import CandidateProfile
-from interview_engine import start_interview, submit_answer
+from pathlib import Path
+
+# Add workspace and llm_engine directory to sys.path
+engine_dir = Path(__file__).resolve().parent
+workspace_dir = engine_dir.parent
+for p in (str(engine_dir), str(workspace_dir)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from llm_engine.models import CandidateProfile
+    from llm_engine.interview_engine import start_interview, submit_answer
+except ImportError:
+    from models import CandidateProfile  # type: ignore
+    from interview_engine import start_interview, submit_answer  # type: ignore
 
 print("Testing End-to-End State Management...")
     

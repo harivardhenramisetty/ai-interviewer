@@ -15,11 +15,16 @@ client = genai.Client(api_key=API_KEY)
 MODEL = "gemini-3.7-flash"
 
 
-def generate_with_retry(contents, schema, temperature, attempts=3):
+from typing import Any, Type, TypeVar
+T = TypeVar("T", bound=BaseModel)
+
+def generate_with_retry(contents: str, schema: Type[T], temperature: float, attempts: int = 3) -> Any:
+    models_to_try = [MODEL, "gemini-2.5-flash", "gemini-1.5-flash"]
     for attempt in range(attempts):
+        model_name = models_to_try[attempt % len(models_to_try)]
         try:
             return client.models.generate_content(
-                model=MODEL,
+                model=model_name,
                 contents=contents,
                 config={
                     "response_mime_type": "application/json",
@@ -36,7 +41,6 @@ def generate_with_retry(contents, schema, temperature, attempts=3):
             if not transient or attempt == attempts - 1:
                 raise
             time.sleep(1.5 * (attempt + 1))
-
 
 
 class CandidateProfile(BaseModel):
@@ -72,6 +76,20 @@ class FinalReport(BaseModel):
     summary: str
 
 
+def _extract_parsed(response: Any, schema: Type[T]) -> dict[str, Any]:
+    if response is not None:
+        parsed = getattr(response, "parsed", None)
+        if parsed is not None:
+            if hasattr(parsed, "model_dump"):
+                return parsed.model_dump()
+            if isinstance(parsed, dict):
+                return parsed
+        text = getattr(response, "text", None)
+        if text:
+            return schema.model_validate_json(text).model_dump()
+    raise ValueError("Empty response from AI model")
+
+
 def analyze_resume(resume_text: str, target_role: str):
     prompt = f"""
 You are an expert technical recruiter.
@@ -86,11 +104,7 @@ Resume:
 """
 
     response = generate_with_retry(prompt, CandidateProfile, 0.1)
-
-    if response.parsed:
-        return response.parsed.model_dump()
-
-    return CandidateProfile.model_validate_json(response.text).model_dump()
+    return _extract_parsed(response, CandidateProfile)
 
 
 def generate_question(profile: dict, target_role: str, interview_history: list):
@@ -120,11 +134,7 @@ Rules:
 """
 
     response = generate_with_retry(prompt, InterviewQuestion, 0.5)
-
-    if response.parsed:
-        return response.parsed.model_dump()
-
-    return InterviewQuestion.model_validate_json(response.text).model_dump()
+    return _extract_parsed(response, InterviewQuestion)
 
 
 def evaluate_answer(profile: dict, target_role: str, question: str, answer: str):
@@ -152,11 +162,7 @@ Return a fair evaluation from 0 to 10.
 """
 
     response = generate_with_retry(prompt, AnswerEvaluation, 0.2)
-
-    if response.parsed:
-        return response.parsed.model_dump()
-
-    return AnswerEvaluation.model_validate_json(response.text).model_dump()
+    return _extract_parsed(response, AnswerEvaluation)
 
 
 def generate_final_report(profile: dict, target_role: str, interview_history: list):
@@ -182,8 +188,4 @@ or "Strong evidence for the role".
 """
 
     response = generate_with_retry(prompt, FinalReport, 0.2)
-
-    if response.parsed:
-        return response.parsed.model_dump()
-
-    return FinalReport.model_validate_json(response.text).model_dump()
+    return _extract_parsed(response, FinalReport)

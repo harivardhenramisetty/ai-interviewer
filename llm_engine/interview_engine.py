@@ -1,12 +1,51 @@
 """
-Candidate profile generation engine using Gemini structured output.
+Interview engine using OpenRouter (Gemini 2.0 Flash / Llama 3.3 70B) for structured AI calls.
 """
-from typing import Optional
-from google import genai
-from pydantic import ValidationError
-from llm import get_client, MODEL_NAME
-from models import CandidateProfile, Question, AnswerEvaluation, InterviewTurn, InterviewSession, InterviewReport, QualitativeReport
-from prompts import PROMPT_GENERATE_PROFILE, PROMPT_GENERATE_QUESTION, PROMPT_EVALUATE_ANSWER, PROMPT_GENERATE_REPORT
+import sys
+import json
+from pathlib import Path
+from typing import Optional, Type, TypeVar
+from pydantic import BaseModel, ValidationError
+
+engine_dir = Path(__file__).resolve().parent
+workspace_dir = engine_dir.parent
+for p in (str(engine_dir), str(workspace_dir)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from llm_engine.llm import generate_json, MODEL_NAME, _extract_json
+    from llm_engine.models import CandidateProfile, Question, AnswerEvaluation, InterviewTurn, InterviewSession, InterviewReport, QualitativeReport
+    from llm_engine.prompts import PROMPT_GENERATE_PROFILE, PROMPT_GENERATE_QUESTION, PROMPT_EVALUATE_ANSWER, PROMPT_GENERATE_REPORT
+except (ImportError, ValueError):
+    from .llm import generate_json, MODEL_NAME, _extract_json  # type: ignore
+    from .models import CandidateProfile, Question, AnswerEvaluation, InterviewTurn, InterviewSession, InterviewReport, QualitativeReport  # type: ignore
+    from .prompts import PROMPT_GENERATE_PROFILE, PROMPT_GENERATE_QUESTION, PROMPT_EVALUATE_ANSWER, PROMPT_GENERATE_REPORT  # type: ignore
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def call_llm_structured(prompt: str, schema: Type[T]) -> T:
+    """Call OpenRouter and parse response into the given Pydantic model."""
+    raw = generate_json(prompt)
+    raw = _extract_json(raw)
+    try:
+        return schema.model_validate_json(raw)
+    except (ValidationError, ValueError, Exception):
+        try:
+            data = json.loads(raw)
+            # Coerce recommended_action to a valid literal if the LLM invented one
+            if "recommended_action" in data:
+                valid = {"follow_up", "move_on", "increase_difficulty"}
+                if data["recommended_action"] not in valid:
+                    data["recommended_action"] = "move_on"
+            # Strip unknown extra fields Pydantic doesn't know about
+            known_fields = set(schema.model_fields.keys())
+            data = {k: v for k, v in data.items() if k in known_fields}
+            return schema.model_validate(data)
+        except Exception:
+            raise ValueError(f"LLM returned unparseable JSON for {schema.__name__}: {raw[:300]}")
+
 
 def generate_candidate_profile(
     resume_text: str,
@@ -14,8 +53,6 @@ def generate_candidate_profile(
     job_description: str | None = None
 ) -> CandidateProfile:
     """Generate a structured candidate profile from a resume and target role."""
-    client = get_client()
-    
     job_desc_section = f"Job Description:\n{job_description}" if job_description else "Job Description: Not provided. Base analysis solely on the target role."
     
     prompt = PROMPT_GENERATE_PROFILE.format(
@@ -24,23 +61,8 @@ def generate_candidate_profile(
         resume_text=resume_text
     )
     
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=genai.types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=CandidateProfile,
-            temperature=0.2, # Lower temperature for analytical extraction
-        ),
-    )
-    
-    if not response.text:
-        raise ValueError("LLM returned an empty response.")
-        
-    try:
-        return CandidateProfile.model_validate_json(response.text)
-    except ValidationError as e:
-        raise ValueError(f"Failed to parse LLM response into CandidateProfile: {e}")
+    return call_llm_structured(prompt, CandidateProfile)
+
 
 def generate_next_question(
     candidate_profile: CandidateProfile,
@@ -49,8 +71,6 @@ def generate_next_question(
     current_topic: str | None = None
 ) -> Question:
     """Generate the next adaptive interview question."""
-    client = get_client()
-    
     # Format history for prompt
     history_text = "No previous questions."
     if conversation_history:
@@ -68,23 +88,8 @@ def generate_next_question(
         conversation_history=history_text
     )
     
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=genai.types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=Question,
-            temperature=0.7, # slightly higher for varied questions
-        ),
-    )
-    
-    if not response.text:
-        raise ValueError("LLM returned an empty response.")
-        
-    try:
-        return Question.model_validate_json(response.text)
-    except ValidationError as e:
-        raise ValueError(f"Failed to parse LLM response into Question: {e}")
+    return call_llm_structured(prompt, Question)
+
 
 def evaluate_answer(
     candidate_profile: CandidateProfile,
@@ -93,16 +98,49 @@ def evaluate_answer(
     conversation_history: list[dict]
 ) -> AnswerEvaluation:
     """Evaluate a candidate's answer against a question."""
-    client = get_client()
-    
-    # Format history for prompt
+
+    stripped = candidate_answer.strip() if candidate_answer else ""
+    words = stripped.split()
+
+    # --- Pre-LLM hard rejection (never waste an API call on these) ---
+    NON_ANSWERS = {
+        "no", "yes", "maybe", "idk", "i don't know", "i dont know",
+        "dunno", "na", "n/a", "skip", "nothing", "none", "not sure",
+        "no idea", "don't know", "dont know", "nope", "yep", "yeah",
+        "ok", "okay", "sure", "fine", "whatever", "pass", "next",
+        "i don't know the answer", "i dont know the answer",
+    }
+
+    is_trivially_empty = not stripped
+    is_trivially_short = len(words) <= 3
+    is_non_answer = stripped.lower() in NON_ANSWERS or stripped.lower().rstrip('.!?') in NON_ANSWERS
+
+    if is_trivially_empty or is_non_answer or is_trivially_short:
+        return AnswerEvaluation(
+            is_relevant=False,
+            score=0,
+            technical_accuracy=0,
+            depth=0,
+            clarity=0,
+            strengths=[],
+            weaknesses=["Answer does not address the question."],
+            feedback=(
+                f"The response '{stripped}' does not answer the question. "
+                "Please provide a detailed technical explanation."
+            ),
+            recommended_action="move_on"
+        )
+
     history_text = "No previous questions."
+
     if conversation_history:
         history_text = "\n\n".join(
-            f"Q: {item.get('question', '')}\nA: {item.get('answer', '')}\nEvaluation: {item.get('evaluation', '')}"
+            f"Q: {item.get('question', '')}\n"
+            f"A: {item.get('answer', '')}\n"
+            f"Evaluation: {item.get('evaluation', '')}"
             for item in conversation_history
         )
-        
+
     prompt = PROMPT_EVALUATE_ANSWER.format(
         question=question.question,
         topic=question.topic,
@@ -112,24 +150,44 @@ def evaluate_answer(
         candidate_profile=candidate_profile.model_dump_json(indent=2),
         conversation_history=history_text
     )
-    
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=genai.types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=AnswerEvaluation,
-            temperature=0.2, # Lower temperature for objective evaluation
-        ),
+
+    evaluation = call_llm_structured(prompt, AnswerEvaluation)
+
+    # HARD RELEVANCE GATE.
+    # Never allow an irrelevant answer to receive a positive score.
+    if not evaluation.is_relevant:
+        evaluation.score = 0
+        evaluation.technical_accuracy = 0
+        evaluation.depth = 0
+        evaluation.clarity = 0
+
+        if not evaluation.weaknesses:
+            evaluation.weaknesses = []
+
+        if "Answer does not address the question." not in evaluation.weaknesses:
+            evaluation.weaknesses.append(
+                "Answer does not address the question."
+            )
+
+        evaluation.feedback = (
+            "The answer did not address the question asked."
+        )
+
+        evaluation.recommended_action = "move_on"
+
+    # Keep all scores safely inside 0-10.
+    evaluation.score = max(0, min(10, evaluation.score))
+    evaluation.technical_accuracy = max(
+        0, min(10, evaluation.technical_accuracy)
     )
-    
-    if not response.text:
-        raise ValueError("LLM returned an empty response.")
-        
-    try:
-        return AnswerEvaluation.model_validate_json(response.text)
-    except ValidationError as e:
-        raise ValueError(f"Failed to parse LLM response into AnswerEvaluation: {e}")
+    evaluation.depth = max(
+        0, min(10, evaluation.depth)
+    )
+    evaluation.clarity = max(
+        0, min(10, evaluation.clarity)
+    )
+
+    return evaluation
 
 def start_interview(
     candidate_profile: CandidateProfile,
@@ -245,24 +303,7 @@ def generate_interview_report(session: InterviewSession) -> InterviewReport:
         interview_transcript="\n\n".join(transcript)
     )
 
-    client = get_client()
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=genai.types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=QualitativeReport,
-            temperature=0.2, 
-        ),
-    )
-
-    if not response.text:
-        raise ValueError("LLM returned an empty response.")
-
-    try:
-        qualitative = QualitativeReport.model_validate_json(response.text)
-    except ValidationError as e:
-        raise ValueError(f"Failed to parse LLM response into QualitativeReport: {e}")
+    qualitative = call_llm_structured(prompt, QualitativeReport)
 
     return InterviewReport(
         overall_score=overall_score,

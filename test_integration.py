@@ -1,8 +1,8 @@
 import os
 import fitz
 from dotenv import load_dotenv
-from resume_parser import extract_text_from_pdf
-from interview_engine import InterviewEngine
+from backend.main import extract_pdf_text
+from llm_engine.interview_engine import generate_candidate_profile, start_interview, submit_answer
 
 def run_test():
     print("Loading env...")
@@ -24,30 +24,29 @@ def run_test():
     
     # 2. Simulate Upload & Extract
     print("Extracting text from PDF...")
-    with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-    
-    resume_text = extract_text_from_pdf(pdf_bytes)
+    resume_text = extract_pdf_text(pdf_path)
     
     # 3. Initialize Interview Engine
     print("Initializing Interview Engine (this will call Gemini)...")
     target_role = "Senior AI Developer"
-    engine = InterviewEngine(target_role=target_role, resume_text=resume_text)
-    engine.initialize_interview()
+    profile = generate_candidate_profile(resume_text=resume_text, target_role=target_role)
+    session = start_interview(candidate_profile=profile, target_role=target_role, max_questions=3)
     
     print("\n--- FIRST QUESTION ---")
-    print(engine.current_question)
+    print(session.current_question.question if session.current_question else "None")
     
     # 4. Process Answer
     print("\nProcessing Answer...")
     answer = "I built a recommendation system using PyTorch and deployed it with Streamlit. It was quite challenging but successful."
-    decision = engine.process_answer(answer)
+    session = submit_answer(session, answer)
     
-    print("\n--- DECISION ---")
-    print(decision.model_dump_json(indent=2))
+    print("\n--- LAST EVALUATION ---")
+    if session.history and session.history[-1].evaluation:
+        print(session.history[-1].evaluation.model_dump_json(indent=2))
     
     print("\n--- NEXT QUESTION ---")
-    print(engine.current_question)
+    print(session.current_question.question if session.current_question else "Interview finished")
 
 if __name__ == "__main__":
     run_test()
+

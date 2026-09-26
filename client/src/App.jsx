@@ -469,16 +469,57 @@ export default function App() {
       { label: 'Clarity', val: report.clarity_score, color: 'var(--success)' },
     ];
 
+    const improvementList = (report.areas_for_improvement && report.areas_for_improvement.length > 0)
+      ? report.areas_for_improvement
+      : (report.gaps || []);
+
+    const recColor = report.overall_score >= 7.5
+      ? 'var(--success)'
+      : report.overall_score >= 5.0
+      ? 'var(--primary)'
+      : 'var(--warning)';
+
+    const resetInterview = () => {
+      setStep('landing');
+      setFile(null);
+      setCandidateId(null);
+      setProfile(null);
+      setInterviewId(null);
+      setCurrentQuestionId(null);
+      setChatHistory([]);
+      setQuestionCount(1);
+      setInterviewFinished(false);
+      setReport(null);
+      setError(null);
+    };
+
     return (
       <div className="app-container fade-in">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '48px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '48px', flexWrap: 'wrap', gap: '24px' }}>
           <div>
             <div style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '13px', marginBottom: '8px' }}>Final Evaluation</div>
-            <h1 style={{ fontSize: '40px' }}>{profile?.name || 'Candidate'}</h1>
-            <div style={{ color: 'var(--primary)', fontSize: '18px', fontWeight: 500, marginTop: '8px' }}>{targetRole}</div>
+            <h1 style={{ fontSize: '40px', marginBottom: '8px' }}>{profile?.name || 'Candidate'}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <span style={{ color: 'var(--primary)', fontSize: '18px', fontWeight: 500 }}>{targetRole}</span>
+              {report.recommendation && (
+                <span style={{
+                  padding: '4px 14px',
+                  borderRadius: '20px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  background: `${recColor}22`,
+                  color: recColor,
+                  border: `1px solid ${recColor}55`
+                }}>
+                  {report.recommendation}
+                </span>
+              )}
+            </div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ width: '100px', height: '100px', borderRadius: '50%', border: `4px solid var(--primary)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>
+            <div style={{ width: '100px', height: '100px', borderRadius: '50%', border: `4px solid ${recColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', fontSize: '28px', fontWeight: 800, marginBottom: '8px', color: recColor }}>
               {report.overall_score}
             </div>
             <div style={{ color: 'var(--text-secondary)' }}>Overall / 10</div>
@@ -491,7 +532,7 @@ export default function App() {
               <div style={{ color: 'var(--text-secondary)', marginBottom: '12px' }}>{s.label}</div>
               <div style={{ fontSize: '32px', fontWeight: 700, color: s.color, marginBottom: '16px' }}>{s.val}</div>
               <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px' }}>
-                <div style={{ height: '100%', width: `${s.val * 10}%`, background: s.color, borderRadius: '2px' }}></div>
+                <div style={{ height: '100%', width: `${Math.min(s.val * 10, 100)}%`, background: s.color, borderRadius: '2px' }}></div>
               </div>
             </div>
           ))}
@@ -504,19 +545,25 @@ export default function App() {
           <p style={{ color: 'var(--text-primary)', lineHeight: 1.8, fontSize: '15px' }}>{report.summary}</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '40px' }}>
           <div className="glass-panel" style={{ padding: '32px' }}>
             <h3 style={{ marginBottom: '24px', color: 'var(--success)' }}>Strengths</h3>
-            <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '12px', color: 'var(--text-secondary)' }}>
-              {report.strengths.map((s, i) => <li key={i}>{s}</li>)}
+            <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '12px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              {(report.strengths || []).map((s, i) => <li key={i}>{s}</li>)}
             </ul>
           </div>
           <div className="glass-panel" style={{ padding: '32px' }}>
             <h3 style={{ marginBottom: '24px', color: 'var(--warning)' }}>Areas for Improvement</h3>
-            <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '12px', color: 'var(--text-secondary)' }}>
-              {report.gaps.map((g, i) => <li key={i}>{g}</li>)}
+            <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '12px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              {improvementList.map((g, i) => <li key={i}>{g}</li>)}
             </ul>
           </div>
+        </div>
+
+        <div style={{ textAlign: 'center', paddingBottom: '40px' }}>
+          <button className="btn btn-primary" onClick={resetInterview} style={{ padding: '16px 36px', fontSize: '16px' }}>
+            <RefreshCw size={18} style={{ marginRight: '8px' }} /> Start New Interview
+          </button>
         </div>
       </div>
     );

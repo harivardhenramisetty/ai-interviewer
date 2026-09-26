@@ -18,7 +18,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -686,27 +686,69 @@ def mock_fallback(func_name, *args):
         }
 
     elif func_name == "generate_final_report":
-        # Compute a real score from actual interview history instead of hardcoding 8.8
         history = args[2] if len(args) > 2 else []
         scores = []
+        covered_topics = []
         for turn in history:
-            ev = turn.get("evaluation")
-            if isinstance(ev, dict):
-                s = ev.get("score")
-                if isinstance(s, (int, float)):
-                    scores.append(float(s))
+            if isinstance(turn, dict):
+                t_name = turn.get("topic")
+                if t_name and t_name not in covered_topics:
+                    covered_topics.append(t_name)
+                ev = turn.get("evaluation")
+                if isinstance(ev, dict):
+                    s = ev.get("score")
+                    if isinstance(s, (int, float)):
+                        scores.append(float(s))
         avg = round(sum(scores) / len(scores), 1) if scores else 0.0
+
+        strengths = []
+        if avg >= 7.5:
+            strengths = [
+                "Strong technical depth and clear understanding of core architectural patterns",
+                f"Demonstrated solid competency across {', '.join(covered_topics[:3]) if covered_topics else 'evaluated topics'}",
+                "Effectively articulated engineering tradeoffs and practical considerations"
+            ]
+        elif avg >= 5.0:
+            strengths = [
+                "Demonstrated foundational technical literacy and ability to discuss practical scenarios",
+                f"Addressed questions on {', '.join(covered_topics[:2]) if covered_topics else 'core engineering areas'}",
+                "Participated constructively throughout the full technical evaluation"
+            ]
+        else:
+            strengths = ["Participated in the interview evaluation session"]
+
+        improvements = []
+        if avg >= 7.5:
+            improvements = [
+                "Deepen exploration of edge cases, distributed failure modes, and automated disaster recovery",
+                "Quantify architectural decisions with concrete operational metrics and benchmarks"
+            ]
+        elif avg >= 5.0:
+            improvements = [
+                "Provide more concrete implementation details and specific framework mechanics",
+                "Elaborate on architectural tradeoffs and explain the 'why' behind design choices",
+                "Strengthen knowledge in performance profiling and database query optimization"
+            ]
+        else:
+            improvements = [
+                "Provide detailed technical explanations rather than brief or surface-level answers",
+                "Review core computer science fundamentals, data structures, and system design patterns",
+                "Practice structuring responses with clear problem breakdown, solution, and tradeoff analysis"
+            ]
+
+        rec = "Strong No Hire" if avg < 3.0 else "Needs Improvement" if avg < 5.5 else "Hire" if avg < 8.0 else "Strong Hire"
+
         return {
             "overall_score": avg,
             "technical_score": round(max(avg - random.uniform(0, 0.3), 0.0), 1),
             "depth_score": round(max(avg - random.uniform(0, 0.5), 0.0), 1),
             "clarity_score": round(max(avg - random.uniform(0, 0.3), 0.0), 1),
-            "strengths": ["Participated in the full interview session"] if avg > 4.0 else [],
-            "areas_for_improvement": ["Provide in-depth technical explanations and reference concrete patterns"] if avg < 7.0 else ["Continue building deep domain expertise"],
-            "gaps": ["Technical depth needs improvement"] if avg < 5.0 else [],
-            "topics_demonstrated": [t.get("topic", "") for t in history if isinstance(t, dict) and t.get("topic")],
-            "recommendations": ["Review system design, data modeling, and performance optimization concepts"],
-            "recommendation": "Strong No Hire" if avg < 3.0 else "Needs Improvement" if avg < 5.5 else "Hire" if avg < 8.0 else "Strong Hire",
+            "strengths": strengths,
+            "areas_for_improvement": improvements,
+            "gaps": improvements,
+            "topics_demonstrated": covered_topics,
+            "recommendations": improvements,
+            "recommendation": rec,
             "summary": f"The candidate completed the interview session with an overall evaluated score of {avg}/10 across all questions."
         }
 

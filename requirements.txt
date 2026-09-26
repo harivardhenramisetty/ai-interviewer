@@ -3,3 +3,4 @@ google-generativeai
 pydantic
 PyMuPDF
 python-dotenv
+deepgram-sdk
